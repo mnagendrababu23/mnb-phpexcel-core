@@ -24,6 +24,10 @@ final class WorksheetData
      * @param list<array{cell:string,url:string,display?:string,tooltip?:string}> $hyperlinks
      * @param list<array{cell:string,author:string,text:string,width?:float|int,height?:float|int,visible?:bool}> $comments
      * @param list<int|string> $sourceColumnKeys Original associative keys, in worksheet column order.
+     * @param list<array<string,mixed>> $filterColumns
+     * @param list<array<string,mixed>> $conditionalFormats
+     * @param list<array<string,mixed>> $dataValidations
+     * @param list<array<string,mixed>> $charts
      */
     public function __construct(
         public string $name,
@@ -51,7 +55,15 @@ final class WorksheetData
         public array $comments = [],
         public array $sourceColumnKeys = [],
         public int $dataRowStart = 0,
-        public ?int $dataRowCount = null
+        public ?int $dataRowCount = null,
+        public int $freezeRows = 0,
+        public int $freezeColumns = 0,
+        public ?string $freezeTopLeftCell = null,
+        public ?string $autoFilterRange = null,
+        public array $filterColumns = [],
+        public array $conditionalFormats = [],
+        public array $dataValidations = [],
+        public array $charts = []
     ) {
     }
 

@@ -87,6 +87,27 @@ final class ReaderOptions
         return $this->with(['read_mode' => ReadMode::fromMixed($mode)->value]);
     }
 
+    /** Detect the most likely physical header row from the first source rows. */
+    public function withAutoHeader(int $sampleRows = 25, float $minimumConfidence = 0.35): self
+    {
+        return $this->with([
+            'header_row' => 'auto',
+            'header_row_mode' => 'auto',
+            'header_detection_rows' => max(1, $sampleRows),
+            'header_min_confidence' => max(0.0, min(1.0, $minimumConfidence)),
+        ]);
+    }
+
+    /** Read formulas as expressions, cached values, or typed expression-plus-cache objects. */
+    public function withFormulaMode(string $mode): self
+    {
+        $mode = strtolower(trim($mode));
+        if (!in_array($mode, ['formula', 'cached_value', 'both'], true)) {
+            throw new \InvalidArgumentException('Formula mode must be formula, cached_value, or both.');
+        }
+        return $this->with(['formula_cells' => $mode]);
+    }
+
     public function withRowErrorPolicy(RowErrorPolicy|string $policy, ?callable $handler = null): self
     {
         $values = ['row_error_policy' => RowErrorPolicy::fromMixed($policy)->value];

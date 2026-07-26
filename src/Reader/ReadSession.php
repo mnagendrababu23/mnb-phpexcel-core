@@ -16,6 +16,9 @@ use Mnb\PHPExcel\Validation\ArrayValidator;
 use Mnb\PHPExcel\Reader\Options\ReaderOptions;
 use Mnb\PHPExcel\Reader\Options\ReadMode;
 use Mnb\PHPExcel\Reader\Options\RowErrorPolicy;
+use Mnb\PHPExcel\Core\RichText;
+use Mnb\PHPExcel\Reader\State\CellSnapshot;
+use Mnb\PHPExcel\Reader\State\HeaderDetection;
 use Mnb\PHPExcel\Reader\State\ReadProgress;
 use Mnb\PHPExcel\Reader\State\RowState;
 use Throwable;
@@ -99,6 +102,13 @@ final class ReadSession
         $clone->defaultOptions['header_row'] = true;
         $clone->defaultOptions['header_row_mode'] = 'first_non_empty';
         return $clone;
+    }
+
+
+    /** Detect the most likely source header row before reading data. */
+    public function autoDetectHeader(int $sampleRows = 25, float $minimumConfidence = 0.35): self
+    {
+        return $this->withOptions(ReaderOptions::defaults()->withAutoHeader($sampleRows, $minimumConfidence));
     }
 
     /** @param array<string,mixed>|ReaderOptions $options */
@@ -275,6 +285,92 @@ final class ReadSession
         ];
     }
 
+
+    /** Read one XLSX cell directly by Excel reference, for example A1. */
+    public function cell(string $cell, array|ReaderOptions $options = []): mixed
+    {
+        return $this->xlsxReader()->readCell($this->path, $cell, $this->sheetNumber, $this->mergeOptions($options));
+    }
+
+    /** @param list<string> $cells @return array<string,mixed> */
+    public function cells(array $cells, array|ReaderOptions $options = []): array
+    {
+        return $this->xlsxReader()->readCells($this->path, $cells, $this->sheetNumber, $this->mergeOptions($options));
+    }
+
+    /** Read a rectangular XLSX range as a two-dimensional row array. */
+    public function rangeValues(string $range, array|ReaderOptions $options = []): array
+    {
+        return $this->xlsxReader()->readRange($this->path, $range, $this->sheetNumber, $this->mergeOptions($options));
+    }
+
+    /** Return value, formula, calculated/cached values, rich text, style, comments and hyperlinks for a cell. */
+    public function cellDetails(string $cell, array|ReaderOptions $options = []): CellSnapshot
+    {
+        return $this->xlsxReader()->readCellDetails($this->path, $cell, $this->sheetNumber, $this->mergeOptions($options));
+    }
+
+    /** @return array<string,mixed> */
+    public function cellStyle(string $cell): array
+    {
+        return $this->xlsxReader()->readCellStyle($this->path, $cell, $this->sheetNumber);
+    }
+
+    /** @return array<string,array<string,mixed>> */
+    public function rangeStyles(string $range): array
+    {
+        return $this->xlsxReader()->readRangeStyles($this->path, $range, $this->sheetNumber);
+    }
+
+    public function richText(string $cell): ?RichText
+    {
+        return $this->xlsxReader()->readRichTextCell($this->path, $cell, $this->sheetNumber);
+    }
+
+    /** @return list<array<string,mixed>> */
+    public function images(bool $includeBytes = false): array
+    {
+        return $this->xlsxReader()->images($this->path, $this->sheetNumber, $includeBytes);
+    }
+
+    /** @return list<array<string,mixed>> */
+    public function extractImages(string $directory, bool $overwrite = false): array
+    {
+        return $this->xlsxReader()->extractImages($this->path, $directory, $this->sheetNumber, $overwrite);
+    }
+
+    public function calculatedCell(string $cell): mixed
+    {
+        return $this->xlsxReader()->calculateCell($this->path, $cell, $this->sheetNumber);
+    }
+
+    /** @return array<string,mixed> */
+    public function calculatedRange(string $range): array
+    {
+        return $this->xlsxReader()->calculateRange($this->path, $range, $this->sheetNumber);
+    }
+
+    /** Inspect a source sample and return the most likely physical header row. */
+    public function detectHeader(array|ReaderOptions $options = []): HeaderDetection
+    {
+        $options = $this->mergeOptions($options);
+        $sampleRows = max(1, (int) ($options['header_detection_rows'] ?? 25));
+        unset($options['header_row'], $options['header_row_mode'], $options['offset'], $options['skip'], $options['limit'], $options['limit_rows']);
+        $options['source_limit_rows'] = $sampleRows;
+
+        $sample = [];
+        foreach ($this->rawRows($options) as $sourceKey => $row) {
+            $index = is_int($sourceKey) ? $sourceKey : count($sample);
+            $values = is_array($row) ? array_values($row) : [$row];
+            $preprocessed = $this->preprocessRows([$values], $options);
+            $sample[$index] = $preprocessed[0] ?? [];
+            if (count($sample) >= $sampleRows) {
+                break;
+            }
+        }
+        return (new HeaderDetector())->detect($sample, $sampleRows);
+    }
+
     /**
      * Iterate normalized rows. CSV and XLSX readers are forward-only here;
      * JSON and XML may buffer their document structure before yielding rows.
@@ -286,6 +382,21 @@ final class ReadSession
     {
         $incoming = $options instanceof ReaderOptions ? $options->toArray() : ReaderOptions::fromArray($options)->toArray();
         $options = array_replace($this->defaultOptions, $incoming);
+        $autoHeader = (($options['header_row'] ?? false) === 'auto')
+            || strtolower((string) ($options['header_row_mode'] ?? '')) === 'auto'
+            || (bool) ($options['auto_detect_header'] ?? false);
+        if ($autoHeader) {
+            $detection = $this->detectHeader($options);
+            $minimum = max(0.0, min(1.0, (float) ($options['header_min_confidence'] ?? 0.35)));
+            if ((bool) ($options['strict_header_detection'] ?? false) && $detection->confidence < $minimum) {
+                throw new MnbExcelException('Unable to detect a header row with the required confidence. Detected confidence: ' . $detection->confidence . ', required: ' . $minimum . '.');
+            }
+            $options['header_row'] = $detection->row;
+            $options['header_row_mode'] = 'physical';
+            if (is_callable($options['header_detection_callback'] ?? null)) {
+                $options['header_detection_callback']($detection);
+            }
+        }
         $this->lastRowErrors = [];
         $startedAt = microtime(true);
         $sourceRowsSeen = 0;
@@ -1106,6 +1217,21 @@ final class ReadSession
             return is_array($result) ? $result : null;
         }
         return null;
+    }
+
+    /** @param array<string,mixed>|ReaderOptions $options @return array<string,mixed> */
+    private function mergeOptions(array|ReaderOptions $options): array
+    {
+        $values = $options instanceof ReaderOptions ? $options->toArray() : ReaderOptions::fromArray($options)->toArray();
+        return array_replace($this->defaultOptions, $values);
+    }
+
+    private function xlsxReader(): XlsxReader
+    {
+        if (!$this->reader instanceof XlsxReader) {
+            throw new MnbExcelException('This operation is available only for native XLSX sessions.');
+        }
+        return $this->reader;
     }
 
     private function rawRows(array $options): iterable
