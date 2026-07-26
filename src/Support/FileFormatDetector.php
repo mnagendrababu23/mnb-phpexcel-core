@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Mnb\PHPExcel\Support;
 
-use ZipArchive;
+use Mnb\PHPExcel\Support\Zip\ZipArchive;
 
 final class FileFormatDetector
 {
