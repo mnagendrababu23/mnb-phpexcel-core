@@ -28,6 +28,7 @@ final class WorksheetData
      * @param list<array<string,mixed>> $conditionalFormats
      * @param list<array<string,mixed>> $dataValidations
      * @param list<array<string,mixed>> $charts
+     * @param list<array<string,mixed>> $pivotTables
      */
     public function __construct(
         public string $name,
@@ -63,7 +64,8 @@ final class WorksheetData
         public array $filterColumns = [],
         public array $conditionalFormats = [],
         public array $dataValidations = [],
-        public array $charts = []
+        public array $charts = [],
+        public array $pivotTables = []
     ) {
     }
 
