@@ -99,6 +99,15 @@ final class ReaderOptions
     }
 
     /** Read formulas as expressions, cached values, or typed expression-plus-cache objects. */
+    /** Supply the password used to open an encrypted XLSX workbook. */
+    public function withPassword(string $password): self
+    {
+        if ($password === '') {
+            throw new \InvalidArgumentException('Workbook password cannot be empty.');
+        }
+        return $this->with(['password' => $password]);
+    }
+
     public function withFormulaMode(string $mode): self
     {
         $mode = strtolower(trim($mode));

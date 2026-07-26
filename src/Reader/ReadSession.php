@@ -209,7 +209,7 @@ final class ReadSession
     public function sheetNames(): array
     {
         if ($this->reader instanceof XlsxReader) {
-            return (new XlsxInspector())->sheetNames($this->path);
+            return (new XlsxInspector())->sheetNames($this->path, $this->defaultOptions);
         }
 
         if ($this->reader instanceof JsonReader || $this->reader instanceof XmlReader || $this->reader instanceof OdsReader) {
@@ -226,7 +226,7 @@ final class ReadSession
     public function inspect(): array
     {
         if ($this->reader instanceof XlsxReader) {
-            return (new XlsxInspector())->inspect($this->path);
+            return (new XlsxInspector())->inspect($this->path, $this->defaultOptions);
         }
 
         if ($this->reader instanceof JsonReader || $this->reader instanceof XmlReader || $this->reader instanceof OdsReader) {
@@ -256,6 +256,12 @@ final class ReadSession
         ];
     }
 
+
+    /** Return file, workbook, and selected worksheet protection metadata. */
+    public function protection(): array
+    {
+        return $this->xlsxReader()->readProtection($this->path, $this->sheetNumber, $this->defaultOptions);
+    }
 
     /**
      * Return XLSX-only cell metadata for the selected sheet: rich text runs, comments, hyperlinks, and advanced object inventory.
@@ -313,41 +319,41 @@ final class ReadSession
     /** @return array<string,mixed> */
     public function cellStyle(string $cell): array
     {
-        return $this->xlsxReader()->readCellStyle($this->path, $cell, $this->sheetNumber);
+        return $this->xlsxReader()->readCellStyle($this->path, $cell, $this->sheetNumber, $this->defaultOptions);
     }
 
     /** @return array<string,array<string,mixed>> */
     public function rangeStyles(string $range): array
     {
-        return $this->xlsxReader()->readRangeStyles($this->path, $range, $this->sheetNumber);
+        return $this->xlsxReader()->readRangeStyles($this->path, $range, $this->sheetNumber, $this->defaultOptions);
     }
 
     public function richText(string $cell): ?RichText
     {
-        return $this->xlsxReader()->readRichTextCell($this->path, $cell, $this->sheetNumber);
+        return $this->xlsxReader()->readRichTextCell($this->path, $cell, $this->sheetNumber, $this->defaultOptions);
     }
 
     /** @return list<array<string,mixed>> */
     public function images(bool $includeBytes = false): array
     {
-        return $this->xlsxReader()->images($this->path, $this->sheetNumber, $includeBytes);
+        return $this->xlsxReader()->images($this->path, $this->sheetNumber, $includeBytes, $this->defaultOptions);
     }
 
     /** @return list<array<string,mixed>> */
     public function extractImages(string $directory, bool $overwrite = false): array
     {
-        return $this->xlsxReader()->extractImages($this->path, $directory, $this->sheetNumber, $overwrite);
+        return $this->xlsxReader()->extractImages($this->path, $directory, $this->sheetNumber, $overwrite, $this->defaultOptions);
     }
 
     public function calculatedCell(string $cell): mixed
     {
-        return $this->xlsxReader()->calculateCell($this->path, $cell, $this->sheetNumber);
+        return $this->xlsxReader()->calculateCell($this->path, $cell, $this->sheetNumber, $this->defaultOptions);
     }
 
     /** @return array<string,mixed> */
     public function calculatedRange(string $range): array
     {
-        return $this->xlsxReader()->calculateRange($this->path, $range, $this->sheetNumber);
+        return $this->xlsxReader()->calculateRange($this->path, $range, $this->sheetNumber, $this->defaultOptions);
     }
 
     /** Inspect a source sample and return the most likely physical header row. */
