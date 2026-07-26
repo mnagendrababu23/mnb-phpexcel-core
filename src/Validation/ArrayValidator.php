@@ -200,6 +200,20 @@ final class ArrayValidator
             }
         }
 
+        if (str_starts_with($rule, 'max_length:')) {
+            $maxLength = max(0, (int) substr($rule, 11));
+            if ($this->textLength((string) $value) > $maxLength) {
+                return $column . ' length must be <= ' . $maxLength . '.';
+            }
+        }
+
+        if (str_starts_with($rule, 'min_length:')) {
+            $minLength = max(0, (int) substr($rule, 11));
+            if ($this->textLength((string) $value) < $minLength) {
+                return $column . ' length must be >= ' . $minLength . '.';
+            }
+        }
+
         if (str_starts_with($rule, 'length:')) {
             $length = (int) substr($rule, 7);
             if ($this->textLength((string) $value) !== $length) {
