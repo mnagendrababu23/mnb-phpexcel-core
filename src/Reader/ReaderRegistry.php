@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Mnb\PHPExcel\Reader;
 
-use Mnb\PHPExcel\Compatibility\XlsReader;
 use Mnb\PHPExcel\Contracts\ReaderPluginInterface;
 use Mnb\PHPExcel\Reader\Plugin\PluginReaderAdapter;
 use Mnb\PHPExcel\Support\ErrorCode;
@@ -24,12 +23,12 @@ final class ReaderRegistry
     {
         $registry = new self();
         $builtIns = [
-            'csv' => CsvReader::class,
-            'json' => JsonReader::class,
-            'xml' => XmlReader::class,
-            'xlsx' => XlsxReader::class,
-            'ods' => OdsReader::class,
-            'xls' => XlsReader::class,
+            'csv' => __NAMESPACE__ . '\\CsvReader',
+            'json' => __NAMESPACE__ . '\\JsonReader',
+            'xml' => __NAMESPACE__ . '\\XmlReader',
+            'xlsx' => __NAMESPACE__ . '\\XlsxReader',
+            'ods' => __NAMESPACE__ . '\\OdsReader',
+            'xls' => __NAMESPACE__ . '\\XlsReader',
         ];
         foreach ($builtIns as $format => $class) {
             if (class_exists($class)) {

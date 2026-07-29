@@ -267,7 +267,7 @@ final class ZipArchive
         $compressed = substr($this->archiveBytes, $dataOffset, (int) ($entry['comp_size'] ?? 0));
         return match ((int) ($entry['method'] ?? 0)) {
             0 => $compressed,
-            8 => (($value = @gzinflate($compressed)) === false ? false : $value),
+            8 => !function_exists('gzinflate') ? false : (($value = @gzinflate($compressed)) === false ? false : $value),
             default => false,
         };
     }

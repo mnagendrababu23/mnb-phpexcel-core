@@ -4,10 +4,7 @@ declare(strict_types=1);
 
 namespace Mnb\PHPExcel\Reader;
 
-use Mnb\PHPExcel\Import\SqlImporter;
-use Mnb\PHPExcel\Import\ImportQualityAnalyzer;
 use Mnb\PHPExcel\Support\AtomicFileWriter;
-use Mnb\PHPExcel\Support\DatabaseConnectionFactory;
 use Mnb\PHPExcel\Support\ErrorCode;
 use Mnb\PHPExcel\Support\MnbExcelException;
 use Mnb\PHPExcel\Support\Coordinate;
@@ -22,9 +19,6 @@ use Mnb\PHPExcel\Reader\State\HeaderDetection;
 use Mnb\PHPExcel\Reader\State\ReadProgress;
 use Mnb\PHPExcel\Reader\State\RowState;
 use Throwable;
-use Mnb\PHPExcel\Writer\JsonWriter;
-use Mnb\PHPExcel\Writer\XmlWriter;
-use Mnb\PHPExcel\Compatibility\XlsReader;
 use PDO;
 
 final class ReadSession
@@ -208,15 +202,8 @@ final class ReadSession
     /** @return list<string> */
     public function sheetNames(): array
     {
-        if ($this->reader instanceof XlsxReader) {
-            return (new XlsxInspector())->sheetNames($this->path, $this->defaultOptions);
-        }
-
-        if ($this->reader instanceof JsonReader || $this->reader instanceof XmlReader || $this->reader instanceof OdsReader) {
+        if ($this->reader instanceof SheetNamesReaderInterface) {
             return $this->reader->sheetNames($this->path, $this->defaultOptions);
-        }
-        if ($this->reader instanceof XlsReader) {
-            return $this->reader->sheetNames($this->path);
         }
 
         return ['Sheet1'];
@@ -225,32 +212,21 @@ final class ReadSession
     /** @return array<string,mixed> */
     public function inspect(): array
     {
-        if ($this->reader instanceof XlsxReader) {
-            return (new XlsxInspector())->inspect($this->path, $this->defaultOptions);
+        if ($this->reader instanceof InspectableReaderInterface) {
+            return $this->reader->inspect($this->path, $this->defaultOptions);
         }
 
-        if ($this->reader instanceof JsonReader || $this->reader instanceof XmlReader || $this->reader instanceof OdsReader) {
-            $names = $this->reader->sheetNames($this->path, $this->defaultOptions);
-            return [
-                'status' => 'ok',
-                'file' => $this->path,
-                'size_bytes' => (int) filesize($this->path),
-                'format' => $this->reader instanceof JsonReader ? 'json' : ($this->reader instanceof OdsReader ? 'ods' : 'xml'),
-                'sheets' => array_map(
-                    static fn(string $name, int $index): array => ['index' => $index + 1, 'name' => $name, 'state' => 'visible'],
-                    $names,
-                    array_keys($names)
-                ),
-                'warnings' => [],
-                'errors' => [],
-            ];
-        }
-
+        $names = $this->sheetNames();
         return [
             'status' => 'ok',
             'file' => $this->path,
             'size_bytes' => (int) filesize($this->path),
-            'sheets' => [['index' => 1, 'name' => 'Sheet1', 'state' => 'visible']],
+            'format' => $this->readerFormat(),
+            'sheets' => array_map(
+                static fn(string $name, int $index): array => ['index' => $index + 1, 'name' => $name, 'state' => 'visible'],
+                $names,
+                array_keys($names)
+            ),
             'warnings' => [],
             'errors' => [],
         ];
@@ -260,7 +236,7 @@ final class ReadSession
     /** Return file, workbook, and selected worksheet protection metadata. */
     public function protection(): array
     {
-        return $this->xlsxReader()->readProtection($this->path, $this->sheetNumber, $this->defaultOptions);
+        return $this->advancedReader()->readProtection($this->path, $this->sheetNumber, $this->defaultOptions);
     }
 
     /**
@@ -273,7 +249,7 @@ final class ReadSession
     public function sheetMetadata(array $options = []): array
     {
         $options = array_replace($this->defaultOptions, $options);
-        if ($this->reader instanceof XlsxReader) {
+        if ($this->reader instanceof AdvancedReaderInterface) {
             return $this->reader->readSheetMetadata($this->path, $this->sheetNumber, $options);
         }
 
@@ -295,65 +271,65 @@ final class ReadSession
     /** Read one XLSX cell directly by Excel reference, for example A1. */
     public function cell(string $cell, array|ReaderOptions $options = []): mixed
     {
-        return $this->xlsxReader()->readCell($this->path, $cell, $this->sheetNumber, $this->mergeOptions($options));
+        return $this->advancedReader()->readCell($this->path, $cell, $this->sheetNumber, $this->mergeOptions($options));
     }
 
     /** @param list<string> $cells @return array<string,mixed> */
     public function cells(array $cells, array|ReaderOptions $options = []): array
     {
-        return $this->xlsxReader()->readCells($this->path, $cells, $this->sheetNumber, $this->mergeOptions($options));
+        return $this->advancedReader()->readCells($this->path, $cells, $this->sheetNumber, $this->mergeOptions($options));
     }
 
     /** Read a rectangular XLSX range as a two-dimensional row array. */
     public function rangeValues(string $range, array|ReaderOptions $options = []): array
     {
-        return $this->xlsxReader()->readRange($this->path, $range, $this->sheetNumber, $this->mergeOptions($options));
+        return $this->advancedReader()->readRange($this->path, $range, $this->sheetNumber, $this->mergeOptions($options));
     }
 
     /** Return value, formula, calculated/cached values, rich text, style, comments and hyperlinks for a cell. */
     public function cellDetails(string $cell, array|ReaderOptions $options = []): CellSnapshot
     {
-        return $this->xlsxReader()->readCellDetails($this->path, $cell, $this->sheetNumber, $this->mergeOptions($options));
+        return $this->advancedReader()->readCellDetails($this->path, $cell, $this->sheetNumber, $this->mergeOptions($options));
     }
 
     /** @return array<string,mixed> */
     public function cellStyle(string $cell): array
     {
-        return $this->xlsxReader()->readCellStyle($this->path, $cell, $this->sheetNumber, $this->defaultOptions);
+        return $this->advancedReader()->readCellStyle($this->path, $cell, $this->sheetNumber, $this->defaultOptions);
     }
 
     /** @return array<string,array<string,mixed>> */
     public function rangeStyles(string $range): array
     {
-        return $this->xlsxReader()->readRangeStyles($this->path, $range, $this->sheetNumber, $this->defaultOptions);
+        return $this->advancedReader()->readRangeStyles($this->path, $range, $this->sheetNumber, $this->defaultOptions);
     }
 
     public function richText(string $cell): ?RichText
     {
-        return $this->xlsxReader()->readRichTextCell($this->path, $cell, $this->sheetNumber, $this->defaultOptions);
+        return $this->advancedReader()->readRichTextCell($this->path, $cell, $this->sheetNumber, $this->defaultOptions);
     }
 
     /** @return list<array<string,mixed>> */
     public function images(bool $includeBytes = false): array
     {
-        return $this->xlsxReader()->images($this->path, $this->sheetNumber, $includeBytes, $this->defaultOptions);
+        return $this->advancedReader()->images($this->path, $this->sheetNumber, $includeBytes, $this->defaultOptions);
     }
 
     /** @return list<array<string,mixed>> */
     public function extractImages(string $directory, bool $overwrite = false): array
     {
-        return $this->xlsxReader()->extractImages($this->path, $directory, $this->sheetNumber, $overwrite, $this->defaultOptions);
+        return $this->advancedReader()->extractImages($this->path, $directory, $this->sheetNumber, $overwrite, $this->defaultOptions);
     }
 
     public function calculatedCell(string $cell): mixed
     {
-        return $this->xlsxReader()->calculateCell($this->path, $cell, $this->sheetNumber, $this->defaultOptions);
+        return $this->advancedReader()->calculateCell($this->path, $cell, $this->sheetNumber, $this->defaultOptions);
     }
 
     /** @return array<string,mixed> */
     public function calculatedRange(string $range): array
     {
-        return $this->xlsxReader()->calculateRange($this->path, $range, $this->sheetNumber, $this->defaultOptions);
+        return $this->advancedReader()->calculateRange($this->path, $range, $this->sheetNumber, $this->defaultOptions);
     }
 
     /** Inspect a source sample and return the most likely physical header row. */
@@ -1038,7 +1014,8 @@ final class ReadSession
      */
     public function toStructuredJson(array $readOptions = [], array $jsonOptions = []): string
     {
-        return (new JsonWriter())->payloadToString($this->toStructuredArray($readOptions), $jsonOptions);
+        $writer = $this->optionalService('Mnb\\PHPExcel\\Writer\\JsonWriter', 'mnb/mnb-phpexcel-json', 'structured JSON export');
+        return $writer->payloadToString($this->toStructuredArray($readOptions), $jsonOptions);
     }
 
     /**
@@ -1061,7 +1038,8 @@ final class ReadSession
      */
     public function toStructuredXml(array $readOptions = [], array $xmlOptions = []): string
     {
-        return (new XmlWriter())->payloadToString($this->toStructuredArray($readOptions), $xmlOptions);
+        $writer = $this->optionalService('Mnb\\PHPExcel\\Writer\\XmlWriter', 'mnb/mnb-phpexcel-xml', 'structured XML export');
+        return $writer->payloadToString($this->toStructuredArray($readOptions), $xmlOptions);
     }
 
     /**
@@ -1088,7 +1066,8 @@ final class ReadSession
     public function previewImport(array $readOptions = [], array $previewOptions = []): array
     {
         $rows = $this->toArray($readOptions);
-        return (new ImportQualityAnalyzer())->preview($rows, $previewOptions);
+        $analyzer = $this->optionalService('Mnb\\PHPExcel\\Import\\ImportQualityAnalyzer', 'mnb/mnb-phpexcel-database', 'import preview');
+        return $analyzer->preview($rows, $previewOptions);
     }
 
     /**
@@ -1116,7 +1095,8 @@ final class ReadSession
     public function duplicateRows(array $columns, array $readOptions = [], array $duplicateOptions = []): array
     {
         $rows = $this->toArray($readOptions);
-        return (new ImportQualityAnalyzer())->findDuplicates($rows, $columns, $duplicateOptions);
+        $analyzer = $this->optionalService('Mnb\\PHPExcel\\Import\\ImportQualityAnalyzer', 'mnb/mnb-phpexcel-database', 'duplicate analysis');
+        return $analyzer->findDuplicates($rows, $columns, $duplicateOptions);
     }
 
     /**
@@ -1134,8 +1114,10 @@ final class ReadSession
     public function importToSql(PDO|array|string|null $pdo, string $table, array $options = []): array
     {
         $rows = $this->toArray($options);
-        $connection = DatabaseConnectionFactory::make($pdo, is_array($options['db'] ?? null) ? $options['db'] : []);
-        return (new SqlImporter())->importRows($connection, $table, $rows, $options);
+        $factory = $this->optionalClass('Mnb\\PHPExcel\\Support\\DatabaseConnectionFactory', 'mnb/mnb-phpexcel-database', 'database connection');
+        $importer = $this->optionalService('Mnb\\PHPExcel\\Import\\SqlImporter', 'mnb/mnb-phpexcel-database', 'SQL import');
+        $connection = $factory::make($pdo, is_array($options['db'] ?? null) ? $options['db'] : []);
+        return $importer->importRows($connection, $table, $rows, $options);
     }
 
     /**
@@ -1146,7 +1128,8 @@ final class ReadSession
      */
     public function toJson(array $readOptions = [], array $jsonOptions = []): string
     {
-        return (new JsonWriter())->rowsToString($this->toArray($readOptions), $jsonOptions);
+        $writer = $this->optionalService('Mnb\\PHPExcel\\Writer\\JsonWriter', 'mnb/mnb-phpexcel-json', 'JSON export');
+        return $writer->rowsToString($this->toArray($readOptions), $jsonOptions);
     }
 
     /**
@@ -1157,7 +1140,8 @@ final class ReadSession
      */
     public function saveJson(string $path, array $readOptions = [], array $jsonOptions = []): string
     {
-        (new JsonWriter())->writeRows($this->toArray($readOptions), $path, $jsonOptions);
+        $writer = $this->optionalService('Mnb\\PHPExcel\\Writer\\JsonWriter', 'mnb/mnb-phpexcel-json', 'JSON export');
+        $writer->writeRows($this->toArray($readOptions), $path, $jsonOptions);
         return $path;
     }
 
@@ -1169,7 +1153,8 @@ final class ReadSession
      */
     public function toXml(array $readOptions = [], array $xmlOptions = []): string
     {
-        return (new XmlWriter())->rowsToString($this->toArray($readOptions), $xmlOptions);
+        $writer = $this->optionalService('Mnb\\PHPExcel\\Writer\\XmlWriter', 'mnb/mnb-phpexcel-xml', 'XML export');
+        return $writer->rowsToString($this->toArray($readOptions), $xmlOptions);
     }
 
     /**
@@ -1180,7 +1165,8 @@ final class ReadSession
      */
     public function saveXml(string $path, array $readOptions = [], array $xmlOptions = []): string
     {
-        (new XmlWriter())->writeRows($this->toArray($readOptions), $path, $xmlOptions);
+        $writer = $this->optionalService('Mnb\\PHPExcel\\Writer\\XmlWriter', 'mnb/mnb-phpexcel-xml', 'XML export');
+        $writer->writeRows($this->toArray($readOptions), $path, $xmlOptions);
         return $path;
     }
 
@@ -1232,12 +1218,43 @@ final class ReadSession
         return array_replace($this->defaultOptions, $values);
     }
 
-    private function xlsxReader(): XlsxReader
+    private function advancedReader(): AdvancedReaderInterface
     {
-        if (!$this->reader instanceof XlsxReader) {
-            throw new MnbExcelException('This operation is available only for native XLSX sessions.');
+        if (!$this->reader instanceof AdvancedReaderInterface) {
+            throw MnbExcelException::withCode(
+                'The selected format does not support this advanced workbook operation.',
+                ErrorCode::UNSUPPORTED_FORMAT,
+                ['format' => $this->readerFormat()]
+            );
         }
         return $this->reader;
+    }
+
+    private function optionalService(string $class, string $package, string $operation): object
+    {
+        $class = $this->optionalClass($class, $package, $operation);
+        $reflection = new \ReflectionClass($class);
+        if (!$reflection->isInstantiable()) {
+            throw new MnbExcelException('Optional service is not instantiable: ' . $class);
+        }
+
+        return $reflection->newInstance();
+    }
+
+    /** @return class-string */
+    private function optionalClass(string $class, string $package, string $operation): string
+    {
+        if (!class_exists($class)) {
+            throw MnbExcelException::withCode(
+                ucfirst($operation) . ' requires the optional package ' . $package . '.',
+                ErrorCode::UNSUPPORTED_FORMAT,
+                ['package' => $package, 'operation' => $operation],
+                null,
+                'Install it with: composer require ' . $package . ':^2.0'
+            );
+        }
+
+        return $class;
     }
 
     private function rawRows(array $options): iterable
@@ -1767,24 +1784,10 @@ final class ReadSession
 
     private function readerFormat(): string
     {
-        if ($this->reader instanceof XlsxReader) {
-            return 'xlsx';
+        if ($this->reader instanceof FormatAwareReaderInterface) {
+            return strtolower($this->reader->format());
         }
-        if ($this->reader instanceof CsvReader) {
-            return 'csv';
-        }
-        if ($this->reader instanceof JsonReader) {
-            return 'json';
-        }
-        if ($this->reader instanceof XmlReader) {
-            return 'xml';
-        }
-        if ($this->reader instanceof OdsReader) {
-            return 'ods';
-        }
-        if ($this->reader instanceof XlsReader) {
-            return 'xls';
-        }
+
         return 'unknown';
     }
 }

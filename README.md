@@ -1,13 +1,18 @@
-# mnb/mnb-phpexcel-core
+# MNB PHPExcel Core
 
-Shared data model, typed reader API, sessions, projection, progress, errors, and reader registry for MNB PHPExcel.
-
-This package is generated from the MNB PHPExcel monorepo. Do not copy source files between modules manually.
-
-## Install
+Shared contracts, workbook data models, typed reader sessions, projection, validation, progress reporting, capability interfaces, and the modular reader registry.
 
 ```bash
-composer require mnb/mnb-phpexcel-core
+composer require mnb/mnb-phpexcel-core:^2.0
 ```
 
-See the main project documentation for typed options, streaming reads, and compatibility notes.
+Core does not install any spreadsheet format. Install one or more format modules, then use the format-specific facade or `SpreadsheetManager`.
+
+```php
+use Mnb\PHPExcel\SpreadsheetManager;
+
+$excel = SpreadsheetManager::create();
+$rows = $excel->read('data.csv')->withHeaderRow()->toArray();
+```
+
+Optional session conversions fail with an actionable package-install message when the corresponding JSON, XML, or database module is absent. Rich workbook operations are exposed through capability interfaces rather than concrete XLSX dependencies.
