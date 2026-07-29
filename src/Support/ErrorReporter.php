@@ -68,6 +68,8 @@ final class ErrorReporter
             ErrorCode::SHEET_NAME_INVALID,
             ErrorCode::SHEET_NOT_FOUND,
             ErrorCode::SHEET_NAME_AMBIGUOUS,
+            ErrorCode::SHEET_EMPTY,
+            ErrorCode::INVALID_ARGUMENT,
             ErrorCode::UNSUPPORTED_FORMAT,
             ErrorCode::EXTENSION_MISSING,
             ErrorCode::JSON_INVALID,
