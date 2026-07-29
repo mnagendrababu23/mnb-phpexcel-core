@@ -7,6 +7,7 @@ namespace Mnb\PHPExcel\Reader;
 use Mnb\PHPExcel\Support\AtomicFileWriter;
 use Mnb\PHPExcel\Support\ErrorCode;
 use Mnb\PHPExcel\Support\MnbExcelException;
+use Mnb\PHPExcel\Support\SheetSelectionException;
 use Mnb\PHPExcel\Support\Coordinate;
 use Mnb\PHPExcel\Support\LocaleNormalizer;
 use Mnb\PHPExcel\Validation\ArrayValidator;
@@ -40,18 +41,64 @@ final class ReadSession
         }
     }
 
-    public function sheet(int|string $sheetNumber): self
+    public function sheet(int|string|null $sheetNumber = null): self
     {
-        if ((is_int($sheetNumber) || ctype_digit((string) $sheetNumber)) && (int) $sheetNumber < 1) {
-            throw new MnbExcelException('Sheet number must be greater than zero.');
+        if ($sheetNumber === null) {
+            throw SheetSelectionException::missing($this->path);
         }
-        if (is_string($sheetNumber) && trim($sheetNumber) === '') {
-            throw new MnbExcelException('Sheet name cannot be empty.');
+
+        if (is_string($sheetNumber)) {
+            $sheetNumber = trim($sheetNumber);
+            if ($sheetNumber === '') {
+                throw SheetSelectionException::emptyName($this->path);
+            }
+        }
+
+        if (is_int($sheetNumber) || ctype_digit((string) $sheetNumber)) {
+            $index = (int) $sheetNumber;
+            if ($index < 1) {
+                throw SheetSelectionException::invalidIndex($index, $this->path);
+            }
+
+            $availableSheets = $this->sheetNames();
+            if (!isset($availableSheets[$index - 1])) {
+                throw SheetSelectionException::notFound($index, $this->path, $availableSheets);
+            }
+            $resolvedSheet = $index;
+        } else {
+            $availableSheets = $this->sheetNames();
+            $resolvedSheet = $this->resolveSheetName($sheetNumber, $availableSheets);
         }
 
         $clone = clone $this;
-        $clone->sheetNumber = $sheetNumber;
+        $clone->sheetNumber = $resolvedSheet;
         return $clone;
+    }
+
+    /** @param list<string> $availableSheets */
+    private function resolveSheetName(string $requested, array $availableSheets): string
+    {
+        foreach ($availableSheets as $name) {
+            if ($name === $requested) {
+                return $name;
+            }
+        }
+
+        $matches = [];
+        foreach ($availableSheets as $name) {
+            if (strcasecmp($name, $requested) === 0) {
+                $matches[] = $name;
+            }
+        }
+
+        if (count($matches) > 1) {
+            throw SheetSelectionException::ambiguousName($requested, $this->path, $availableSheets);
+        }
+        if ($matches === []) {
+            throw SheetSelectionException::notFound($requested, $this->path, $availableSheets);
+        }
+
+        return $matches[0];
     }
 
     /**
