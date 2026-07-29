@@ -55,11 +55,11 @@ final class XmlReader
     public function open(string $uri, ?string $encoding = null, int $flags = 0): bool
     {
         if ($this->native !== null) {
-            $ok = $this->native->open($uri, $encoding, $flags);
-            if ($ok) {
-                $this->syncNative();
-            }
-            return $ok;
+            // XMLReader is not positioned on a node immediately after open().
+            // Reading node properties at this point can raise a libxml Error on
+            // PHP builds that enforce XMLReader's unpositioned state strictly.
+            $this->resetPublicState();
+            return $this->native->open($uri, $encoding, $flags);
         }
         $xml = $this->readUri($uri);
         if ($xml === false) {
@@ -71,11 +71,10 @@ final class XmlReader
     public function XML(string $source, ?string $encoding = null, int $flags = 0): bool
     {
         if ($this->native !== null) {
-            $ok = $this->native->XML($source, $encoding, $flags);
-            if ($ok) {
-                $this->syncNative();
-            }
-            return $ok;
+            // XML() initializes the parser but, like open(), does not advance
+            // it to the first node. Public state remains NONE until read().
+            $this->resetPublicState();
+            return $this->native->XML($source, $encoding, $flags);
         }
         return $this->load($source);
     }
@@ -86,6 +85,8 @@ final class XmlReader
             $ok = $this->native->read();
             if ($ok) {
                 $this->syncNative();
+            } else {
+                $this->resetPublicState();
             }
             return $ok;
         }
@@ -334,13 +335,30 @@ final class XmlReader
         if ($this->native === null) {
             return;
         }
-        $this->nodeType = $this->native->nodeType;
-        $this->name = (string) $this->native->name;
-        $this->localName = (string) $this->native->localName;
-        $this->value = (string) $this->native->value;
-        $this->depth = $this->native->depth;
-        $this->isEmptyElement = $this->native->isEmptyElement;
-        $this->hasAttributes = $this->native->hasAttributes;
+
+        try {
+            $this->nodeType = (int) $this->native->nodeType;
+            $this->name = (string) $this->native->name;
+            $this->localName = (string) $this->native->localName;
+            $this->value = (string) $this->native->value;
+            $this->depth = (int) $this->native->depth;
+
+            // These properties are meaningful only for element nodes. Avoid
+            // asking libxml for them while positioned on text/attribute nodes.
+            $this->isEmptyElement = $this->nodeType === self::ELEMENT
+                ? (bool) $this->native->isEmptyElement
+                : false;
+            $this->hasAttributes = $this->nodeType === self::ELEMENT
+                ? (bool) $this->native->hasAttributes
+                : false;
+        } catch (\Throwable $error) {
+            $this->resetPublicState();
+            throw new \RuntimeException(
+                'Unable to synchronize native XMLReader state: ' . $error->getMessage(),
+                0,
+                $error
+            );
+        }
     }
 
     private function resetPublicState(): void
