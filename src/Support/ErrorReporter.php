@@ -63,6 +63,11 @@ final class ErrorReporter
     {
         return in_array($code, [
             ErrorCode::FILE_NOT_FOUND,
+            ErrorCode::SHEET_SELECTION_REQUIRED,
+            ErrorCode::SHEET_INDEX_INVALID,
+            ErrorCode::SHEET_NAME_INVALID,
+            ErrorCode::SHEET_NOT_FOUND,
+            ErrorCode::SHEET_NAME_AMBIGUOUS,
             ErrorCode::UNSUPPORTED_FORMAT,
             ErrorCode::EXTENSION_MISSING,
             ErrorCode::JSON_INVALID,

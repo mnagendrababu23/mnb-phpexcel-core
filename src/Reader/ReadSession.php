@@ -6,7 +6,9 @@ namespace Mnb\PHPExcel\Reader;
 
 use Mnb\PHPExcel\Support\AtomicFileWriter;
 use Mnb\PHPExcel\Support\ErrorCode;
+use Mnb\PHPExcel\Support\EmptyWorksheetException;
 use Mnb\PHPExcel\Support\MnbExcelException;
+use Mnb\PHPExcel\Support\SheetSelectionException;
 use Mnb\PHPExcel\Support\Coordinate;
 use Mnb\PHPExcel\Support\LocaleNormalizer;
 use Mnb\PHPExcel\Validation\ArrayValidator;
@@ -40,18 +42,64 @@ final class ReadSession
         }
     }
 
-    public function sheet(int|string $sheetNumber): self
+    public function sheet(int|string|null $sheetNumber = null): self
     {
-        if ((is_int($sheetNumber) || ctype_digit((string) $sheetNumber)) && (int) $sheetNumber < 1) {
-            throw new MnbExcelException('Sheet number must be greater than zero.');
+        if ($sheetNumber === null) {
+            throw SheetSelectionException::missing($this->path);
         }
-        if (is_string($sheetNumber) && trim($sheetNumber) === '') {
-            throw new MnbExcelException('Sheet name cannot be empty.');
+
+        if (is_string($sheetNumber)) {
+            $sheetNumber = trim($sheetNumber);
+            if ($sheetNumber === '') {
+                throw SheetSelectionException::emptyName($this->path);
+            }
+        }
+
+        if (is_int($sheetNumber) || ctype_digit((string) $sheetNumber)) {
+            $index = (int) $sheetNumber;
+            if ($index < 1) {
+                throw SheetSelectionException::invalidIndex($index, $this->path);
+            }
+
+            $availableSheets = $this->sheetNames();
+            if (!isset($availableSheets[$index - 1])) {
+                throw SheetSelectionException::notFound($index, $this->path, $availableSheets);
+            }
+            $resolvedSheet = $index;
+        } else {
+            $availableSheets = $this->sheetNames();
+            $resolvedSheet = $this->resolveSheetName($sheetNumber, $availableSheets);
         }
 
         $clone = clone $this;
-        $clone->sheetNumber = $sheetNumber;
+        $clone->sheetNumber = $resolvedSheet;
         return $clone;
+    }
+
+    /** @param list<string> $availableSheets */
+    private function resolveSheetName(string $requested, array $availableSheets): string
+    {
+        foreach ($availableSheets as $name) {
+            if ($name === $requested) {
+                return $name;
+            }
+        }
+
+        $matches = [];
+        foreach ($availableSheets as $name) {
+            if (strcasecmp($name, $requested) === 0) {
+                $matches[] = $name;
+            }
+        }
+
+        if (count($matches) > 1) {
+            throw SheetSelectionException::ambiguousName($requested, $this->path, $availableSheets);
+        }
+        if ($matches === []) {
+            throw SheetSelectionException::notFound($requested, $this->path, $availableSheets);
+        }
+
+        return $matches[0];
     }
 
     /**
@@ -207,6 +255,89 @@ final class ReadSession
         }
 
         return ['Sheet1'];
+    }
+
+    /** Return true when a 1-based worksheet number or worksheet name exists. */
+    public function hasSheet(int|string $sheet): bool
+    {
+        if (is_string($sheet)) {
+            $sheet = trim($sheet);
+            if ($sheet === '') {
+                return false;
+            }
+        }
+
+        $availableSheets = $this->sheetNames();
+        if (is_int($sheet) || ctype_digit((string) $sheet)) {
+            $index = (int) $sheet;
+            return $index >= 1 && isset($availableSheets[$index - 1]);
+        }
+
+        foreach ($availableSheets as $name) {
+            if ($name === $sheet || strcasecmp($name, (string) $sheet) === 0) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** Alias for hasSheet() for discoverable conditional-selection code. */
+    public function sheetExists(int|string $sheet): bool
+    {
+        return $this->hasSheet($sheet);
+    }
+
+    /** Return a selected session when the worksheet exists, otherwise null. */
+    public function sheetIfExists(int|string $sheet): ?self
+    {
+        return $this->hasSheet($sheet) ? $this->sheet($sheet) : null;
+    }
+
+    /** @return array{index:int,name:string} */
+    public function activeSheetInfo(): array
+    {
+        if ($this->reader instanceof ActiveSheetReaderInterface) {
+            $active = $this->reader->activeSheet($this->path, $this->defaultOptions);
+            $index = (int) ($active['index'] ?? 0);
+            $name = trim((string) ($active['name'] ?? ''));
+            if ($index >= 1 && $name !== '') {
+                return ['index' => $index, 'name' => $name];
+            }
+        }
+
+        $availableSheets = $this->sheetNames();
+        if ($availableSheets === []) {
+            throw SheetSelectionException::notFound(1, $this->path, []);
+        }
+
+        return ['index' => 1, 'name' => $availableSheets[0]];
+    }
+
+    public function activeSheetName(): string
+    {
+        return $this->activeSheetInfo()['name'];
+    }
+
+    /** Return the active worksheet number using the library's 1-based indexing. */
+    public function activeSheetIndex(): int
+    {
+        return $this->activeSheetInfo()['index'];
+    }
+
+    /** Select the workbook's active worksheet. */
+    public function activeSheet(): self
+    {
+        $active = $this->activeSheetInfo();
+        $clone = clone $this;
+        $clone->sheetNumber = $active['index'];
+        return $clone;
+    }
+
+    /** Alias for activeSheet() when used as a fluent selection operation. */
+    public function useActiveSheet(): self
+    {
+        return $this->activeSheet();
     }
 
     /** @return array<string,mixed> */
@@ -690,15 +821,55 @@ final class ReadSession
     }
 
     /** @return array<string,mixed>|list<mixed>|null */
-    public function first(array $options = []): ?array
+    public function first(array|ReaderOptions $options = []): ?array
     {
-        foreach ($this->rows(array_replace($options, ['limit' => 1])) as $row) {
+        $values = $options instanceof ReaderOptions ? $options->toArray() : $options;
+        foreach ($this->rows(array_replace($values, ['limit' => 1])) as $row) {
             return $row;
         }
         return null;
     }
 
-    public function countRows(array $options = []): int
+    /** Return true when at least one normalized data row remains after all current options. */
+    public function hasRows(array|ReaderOptions $options = []): bool
+    {
+        return $this->first($options) !== null;
+    }
+
+    /** Return true when zero normalized data rows remain after all current options. */
+    public function isEmpty(array|ReaderOptions $options = []): bool
+    {
+        return !$this->hasRows($options);
+    }
+
+    /**
+     * Require at least one normalized data row and keep the session fluent.
+     *
+     * @throws EmptyWorksheetException
+     */
+    public function assertHasRows(array|ReaderOptions $options = [], ?string $message = null): self
+    {
+        if ($this->hasRows($options)) {
+            return $this;
+        }
+
+        $sheet = $this->selectedSheetLabel();
+        $values = $options instanceof ReaderOptions ? $options->toArray() : $options;
+        throw EmptyWorksheetException::forSheet(
+            $this->path,
+            $sheet,
+            array_replace($this->defaultOptions, $values),
+            $message
+        );
+    }
+
+    /** Alias for assertHasRows(). */
+    public function requireRows(array|ReaderOptions $options = [], ?string $message = null): self
+    {
+        return $this->assertHasRows($options, $message);
+    }
+
+    public function countRows(array|ReaderOptions $options = []): int
     {
         $count = 0;
         foreach ($this->rows($options) as $_) {
@@ -1756,6 +1927,23 @@ final class ReadSession
     private function lower(string $value): string
     {
         return function_exists('mb_strtolower') ? mb_strtolower($value, 'UTF-8') : strtolower($value);
+    }
+
+    private function selectedSheetLabel(): int|string
+    {
+        $availableSheets = $this->sheetNames();
+        if (is_int($this->sheetNumber) || ctype_digit((string) $this->sheetNumber)) {
+            $index = (int) $this->sheetNumber;
+            return $availableSheets[$index - 1] ?? $index;
+        }
+
+        foreach ($availableSheets as $name) {
+            if ($name === $this->sheetNumber || strcasecmp($name, (string) $this->sheetNumber) === 0) {
+                return $name;
+            }
+        }
+
+        return $this->sheetNumber;
     }
 
     /** @param array<string,mixed> $inspection @return array<string,mixed> */

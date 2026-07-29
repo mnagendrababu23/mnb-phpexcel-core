@@ -9,6 +9,12 @@ final class ErrorCode
     public const RUNTIME_ERROR = 'MNB_RUNTIME_ERROR';
     public const INVALID_ARGUMENT = 'MNB_INVALID_ARGUMENT';
     public const FILE_NOT_FOUND = 'MNB_FILE_NOT_FOUND';
+    public const SHEET_SELECTION_REQUIRED = 'MNB_SHEET_SELECTION_REQUIRED';
+    public const SHEET_INDEX_INVALID = 'MNB_SHEET_INDEX_INVALID';
+    public const SHEET_NAME_INVALID = 'MNB_SHEET_NAME_INVALID';
+    public const SHEET_NOT_FOUND = 'MNB_SHEET_NOT_FOUND';
+    public const SHEET_NAME_AMBIGUOUS = 'MNB_SHEET_NAME_AMBIGUOUS';
+    public const SHEET_EMPTY = 'MNB_SHEET_EMPTY';
     public const DIRECTORY_CREATE_FAILED = 'MNB_DIRECTORY_CREATE_FAILED';
     public const FILE_OPEN_FAILED = 'MNB_FILE_OPEN_FAILED';
     public const FILE_READ_FAILED = 'MNB_FILE_READ_FAILED';
@@ -58,6 +64,12 @@ final class ErrorCode
     {
         return match ($code) {
             self::FILE_NOT_FOUND => 'The requested file could not be found.',
+            self::SHEET_SELECTION_REQUIRED => 'A worksheet selection was not provided.',
+            self::SHEET_INDEX_INVALID => 'The worksheet number is invalid.',
+            self::SHEET_NAME_INVALID => 'The worksheet name is invalid.',
+            self::SHEET_NOT_FOUND => 'The requested worksheet could not be found.',
+            self::SHEET_NAME_AMBIGUOUS => 'The worksheet name is ambiguous.',
+            self::SHEET_EMPTY => 'The selected worksheet does not contain readable data rows.',
             self::DIRECTORY_CREATE_FAILED => 'The export directory could not be created.',
             self::FILE_OPEN_FAILED => 'The file could not be opened.',
             self::FILE_READ_FAILED => 'The file could not be read.',
