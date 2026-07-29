@@ -14,6 +14,7 @@ final class ErrorCode
     public const SHEET_NAME_INVALID = 'MNB_SHEET_NAME_INVALID';
     public const SHEET_NOT_FOUND = 'MNB_SHEET_NOT_FOUND';
     public const SHEET_NAME_AMBIGUOUS = 'MNB_SHEET_NAME_AMBIGUOUS';
+    public const SHEET_EMPTY = 'MNB_SHEET_EMPTY';
     public const DIRECTORY_CREATE_FAILED = 'MNB_DIRECTORY_CREATE_FAILED';
     public const FILE_OPEN_FAILED = 'MNB_FILE_OPEN_FAILED';
     public const FILE_READ_FAILED = 'MNB_FILE_READ_FAILED';
@@ -68,6 +69,7 @@ final class ErrorCode
             self::SHEET_NAME_INVALID => 'The worksheet name is invalid.',
             self::SHEET_NOT_FOUND => 'The requested worksheet could not be found.',
             self::SHEET_NAME_AMBIGUOUS => 'The worksheet name is ambiguous.',
+            self::SHEET_EMPTY => 'The selected worksheet does not contain readable data rows.',
             self::DIRECTORY_CREATE_FAILED => 'The export directory could not be created.',
             self::FILE_OPEN_FAILED => 'The file could not be opened.',
             self::FILE_READ_FAILED => 'The file could not be read.',

@@ -28,3 +28,29 @@ try {
     print_r($e->toErrorArray(debug: true));
 }
 ```
+
+
+## Worksheet discovery and empty-data checks
+
+Reader sessions expose non-throwing discovery helpers and explicit row assertions:
+
+```php
+$session = $excel->read('report.xlsx');
+
+$session->hasSheet('Data');          // bool, case-insensitive name check
+$session->sheetExists(2);            // alias; worksheet numbers are 1-based
+$session->sheetIfExists('Optional'); // ReadSession|null
+
+$session->activeSheetInfo();         // ['index' => 2, 'name' => 'Data']
+$session->activeSheetName();         // Data
+$session->activeSheetIndex();        // 2
+$session->activeSheet();             // cloned session selecting the active worksheet
+
+$selected = $session->activeSheet()->withHeaderRow(1);
+$selected->hasRows();                // true when normalized data rows remain
+$selected->isEmpty();                // inverse of hasRows()
+$selected->countRows();              // exact normalized data-row count
+$selected->assertHasRows();          // fluent session or EmptyWorksheetException
+```
+
+`hasRows()` and `isEmpty()` evaluate rows after the configured header, range, skip, filtering, projection, and empty-row options. A sheet containing only a header row is therefore empty from the data-processing perspective.
