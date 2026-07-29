@@ -258,8 +258,12 @@ final class ReadSession
     }
 
     /** Return true when a 1-based worksheet number or worksheet name exists. */
-    public function hasSheet(int|string $sheet): bool
+    public function hasSheet(int|string|null $sheet): bool
     {
+        if ($sheet === null) {
+            return false;
+        }
+
         if (is_string($sheet)) {
             $sheet = trim($sheet);
             if ($sheet === '') {
@@ -283,15 +287,37 @@ final class ReadSession
     }
 
     /** Alias for hasSheet() for discoverable conditional-selection code. */
-    public function sheetExists(int|string $sheet): bool
+    public function sheetExists(int|string|null $sheet): bool
     {
         return $this->hasSheet($sheet);
     }
 
     /** Return a selected session when the worksheet exists, otherwise null. */
-    public function sheetIfExists(int|string $sheet): ?self
+    public function sheetIfExists(int|string|null $sheet): ?self
     {
         return $this->hasSheet($sheet) ? $this->sheet($sheet) : null;
+    }
+
+    /**
+     * Select an optional worksheet value, falling back to the workbook's active
+     * worksheet when the value is null or an empty string.
+     *
+     * A non-empty unknown name or out-of-range number remains an error so typos
+     * are not hidden. For a completely non-throwing lookup, use sheetIfExists().
+     */
+    public function sheetOrActive(int|string|null $sheet = null): self
+    {
+        if ($sheet === null || (is_string($sheet) && trim($sheet) === '')) {
+            return $this->activeSheet();
+        }
+
+        return $this->sheet($sheet);
+    }
+
+    /** Alias for sheetOrActive(). */
+    public function selectSheetOrActive(int|string|null $sheet = null): self
+    {
+        return $this->sheetOrActive($sheet);
     }
 
     /** @return array{index:int,name:string} */

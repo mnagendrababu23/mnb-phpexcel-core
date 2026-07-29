@@ -1,5 +1,12 @@
 # Changelog
 
+## 2.0.4
+- Added opt-in `MnbExcelErrorHandler` rendering for clean text, HTML, JSON, or application-defined error output without PHP's uncaught-exception stack trace.
+- Added `registerDeveloperMode()` and custom renderer callbacks for developer-owned presentation.
+- Added `sheetOrActive()` and `selectSheetOrActive()` for optional null/empty worksheet input.
+- Broadened `hasSheet()`, `sheetExists()`, and `sheetIfExists()` to accept null safely.
+- Marked empty-sheet and invalid-argument errors as recoverable in structured error reports.
+
 ## 2.0.3
 - Added `hasSheet()`, `sheetExists()`, and nullable `sheetIfExists()` worksheet discovery helpers.
 - Added `activeSheetInfo()`, `activeSheetName()`, `activeSheetIndex()`, `activeSheet()`, and `useActiveSheet()`.

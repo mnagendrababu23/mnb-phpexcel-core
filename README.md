@@ -21,6 +21,8 @@ Optional session conversions fail with an actionable package-install message whe
 
 All worksheet-selection failures use `Mnb\PHPExcel\Support\SheetSelectionException`, a subtype of `MnbExcelException`. It exposes a stable error code, safe message, debug context, workbook path, available worksheet names, and the application caller file/line.
 
+Catch exceptions when your application wants complete control:
+
 ```php
 try {
     $session->sheet('Unknown');
@@ -28,6 +30,37 @@ try {
     print_r($e->toErrorArray(debug: true));
 }
 ```
+
+Or register the optional application-level renderer once near `vendor/autoload.php`. This prevents PHP from printing an uncaught exception's library file and stack trace:
+
+```php
+use Mnb\PHPExcel\Support\MnbExcelErrorHandler;
+
+MnbExcelErrorHandler::registerDeveloperMode();
+```
+
+Production-safe output is available with debug details disabled:
+
+```php
+MnbExcelErrorHandler::register([
+    'debug' => false,
+    'format' => 'auto', // CLI text, browser HTML, or JSON for JSON requests
+]);
+```
+
+Applications can own the final presentation completely:
+
+```php
+MnbExcelErrorHandler::register([
+    'debug' => true,
+    'renderer' => static function (array $error): string {
+        return 'Excel import failed [' . $error['code'] . ']: '
+            . ($error['developer_message'] ?? $error['message']);
+    },
+]);
+```
+
+The handler is opt-in because reusable libraries should not silently replace an application's global exception handler.
 
 
 ## Worksheet discovery and empty-data checks
@@ -40,6 +73,8 @@ $session = $excel->read('report.xlsx');
 $session->hasSheet('Data');          // bool, case-insensitive name check
 $session->sheetExists(2);            // alias; worksheet numbers are 1-based
 $session->sheetIfExists('Optional'); // ReadSession|null
+$session->sheetIfExists(null);       // null, never throws
+$session->sheetOrActive('');         // active worksheet for optional empty input
 
 $session->activeSheetInfo();         // ['index' => 2, 'name' => 'Data']
 $session->activeSheetName();         // Data

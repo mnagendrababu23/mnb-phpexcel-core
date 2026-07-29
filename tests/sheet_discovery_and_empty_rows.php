@@ -67,6 +67,9 @@ try {
     assert($session->hasSheet('data'));
     assert($session->sheetExists('Empty'));
     assert(!$session->hasSheet(0));
+    assert(!$session->hasSheet(null));
+    assert($session->sheetIfExists(null) === null);
+    assert($session->sheetIfExists('') === null);
     assert(!$session->hasSheet('Missing'));
     assert($session->sheetIfExists('Missing') === null);
     assert($session->sheetIfExists('Data') instanceof ReadSession);
@@ -74,6 +77,9 @@ try {
     assert($session->activeSheetIndex() === 2);
     assert($session->activeSheetName() === 'Data');
     assert($session->activeSheetInfo() === ['index' => 2, 'name' => 'Data']);
+    assert($session->sheetOrActive(null)->activeSheetName() === 'Data');
+    assert($session->sheetOrActive('')->activeSheetName() === 'Data');
+    assert($session->selectSheetOrActive(null)->activeSheetIndex() === 2);
 
     $active = $session->activeSheet()->withHeaderRow(1);
     assert($active->hasRows());
