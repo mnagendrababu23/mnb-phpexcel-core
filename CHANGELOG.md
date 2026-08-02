@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.5
+- Added metadata schema `1.0` with quick, standard, full, and forensic profiles.
+- Added `ReadSession::metaInfo()` and optional `MetadataReaderInterface` format capability.
+- Added shared metadata report, options, capability, section-state, profile, and writer contracts.
+- Readers without a rich collector now return a stable file/workbook envelope with explicit unsupported states instead of incompatible ad-hoc arrays.
+
 ## 2.0.4
 - Added opt-in `MnbExcelErrorHandler` rendering for clean text, HTML, JSON, or application-defined error output without PHP's uncaught-exception stack trace.
 - Added `registerDeveloperMode()` and custom renderer callbacks for developer-owned presentation.

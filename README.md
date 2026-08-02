@@ -89,3 +89,19 @@ $selected->assertHasRows();          // fluent session or EmptyWorksheetExceptio
 ```
 
 `hasRows()` and `isEmpty()` evaluate rows after the configured header, range, skip, filtering, projection, and empty-row options. A sheet containing only a header row is therefore empty from the data-processing perspective.
+
+## Unified metadata contract
+
+Every `ReadSession` now exposes `metaInfo()` and returns metadata schema `1.0`. Format readers may implement `MetadataReaderInterface` for rich native inspection; readers without a collector still return a stable envelope containing file and workbook basics plus explicit `not_supported` states.
+
+```php
+$report = $excel->read('report.xlsx')->metaInfo([
+    'profile' => 'standard', // quick, standard, full, forensic
+]);
+
+if ($report['document']['state'] === 'available') {
+    echo $report['document']['title'];
+}
+```
+
+Shared metadata types are under `Mnb\PHPExcel\Metadata`: `MetadataProfile`, `MetadataSectionState`, `MetadataOptions`, `MetadataReport`, `MetadataCapabilities`, and `MetadataWriterInterface`. Empty item lists must always be interpreted together with the section `state` and `count`.

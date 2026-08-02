@@ -1,0 +1,14 @@
+# Changed/new files for mnb-phpexcel-core
+# Apply at the repository root, preserving paths.
+
+MODIFIED CHANGELOG.md
+MODIFIED README.md
+MODIFIED VERSION
+NEW      src/Metadata/MetadataCapabilities.php
+NEW      src/Metadata/MetadataOptions.php
+NEW      src/Metadata/MetadataProfile.php
+NEW      src/Metadata/MetadataReport.php
+NEW      src/Metadata/MetadataSectionState.php
+NEW      src/Metadata/MetadataWriterInterface.php
+NEW      src/Reader/MetadataReaderInterface.php
+MODIFIED src/Reader/ReadSession.php

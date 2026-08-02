@@ -390,6 +390,86 @@ final class ReadSession
     }
 
 
+    /**
+     * Return normalized workbook metadata using the shared schema.
+     *
+     * Format packages can implement MetadataReaderInterface for rich metadata.
+     * Other readers receive a safe common fallback containing file and sheet data.
+     *
+     * @param array<string,mixed> $options
+     * @return array<string,mixed>
+     */
+    public function metaInfo(array $options = []): array
+    {
+        $merged = array_replace($this->defaultOptions, $options);
+        if ($this->reader instanceof MetadataReaderInterface) {
+            return $this->reader->metaInfo($this->path, $merged);
+        }
+
+        $metadataOptions = \Mnb\PHPExcel\Metadata\MetadataOptions::fromArray($merged);
+        $format = $this->readerFormat();
+        $extension = strtolower((string) pathinfo($this->path, PATHINFO_EXTENSION));
+        $mime = function_exists('mime_content_type') ? (string) (@mime_content_type($this->path) ?: '') : '';
+        $report = new \Mnb\PHPExcel\Metadata\MetadataReport(
+            $format,
+            $extension !== '' ? $extension : $format,
+            $mime,
+            $metadataOptions->profile()
+        );
+
+        $size = filesize($this->path);
+        $modified = filemtime($this->path);
+        $accessed = fileatime($this->path);
+        $created = filectime($this->path);
+        $file = [
+            'path' => $this->path,
+            'resolved_path' => realpath($this->path) ?: $this->path,
+            'name' => basename($this->path),
+            'extension' => $extension,
+            'size_bytes' => $size === false ? null : (int) $size,
+            'filesystem_created_at' => $created === false ? null : date(DATE_ATOM, $created),
+            'filesystem_modified_at' => $modified === false ? null : date(DATE_ATOM, $modified),
+            'filesystem_accessed_at' => $accessed === false ? null : date(DATE_ATOM, $accessed),
+            'readable' => is_readable($this->path),
+            'writable' => is_writable($this->path),
+            'sha256' => $metadataOptions->includeHash() ? hash_file('sha256', $this->path) : null,
+        ];
+        $names = $this->sheetNames();
+        $sheets = array_map(
+            static fn(string $name, int $index): array => [
+                'index' => $index + 1,
+                'name' => $name,
+                'state' => 'visible',
+            ],
+            $names,
+            array_keys($names)
+        );
+
+        $report->setSection('file', \Mnb\PHPExcel\Metadata\MetadataSectionState::AVAILABLE, $file)
+            ->setSection('workbook', \Mnb\PHPExcel\Metadata\MetadataSectionState::PARTIAL, [
+                'name' => pathinfo($this->path, PATHINFO_FILENAME),
+                'sheet_count' => count($sheets),
+                'sheets' => $sheets,
+                'count' => count($sheets),
+                'items' => $sheets,
+                'warnings' => ['The selected format reader does not yet provide its rich metadata collector.'],
+            ]);
+
+        foreach ([
+            'format_details', 'document', 'revision', 'application', 'custom_properties',
+            'security', 'macros', 'named_objects', 'links', 'hidden_content',
+            'comments_notes', 'tracked_changes', 'embedded_objects', 'calculation',
+            'print_settings', 'validation', 'pivot_metadata', 'xml_metadata', 'statistics',
+        ] as $section) {
+            $report->setSection($section, \Mnb\PHPExcel\Metadata\MetadataSectionState::NOT_SUPPORTED);
+        }
+
+        $array = $report->toArray();
+        $report->capabilities(\Mnb\PHPExcel\Metadata\MetadataCapabilities::fromReport($array));
+        return $report->toArray();
+    }
+
+
     /** Return file, workbook, and selected worksheet protection metadata. */
     public function protection(): array
     {
