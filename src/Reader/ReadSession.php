@@ -20,6 +20,7 @@ use Mnb\PHPExcel\Reader\State\CellSnapshot;
 use Mnb\PHPExcel\Reader\State\HeaderDetection;
 use Mnb\PHPExcel\Reader\State\ReadProgress;
 use Mnb\PHPExcel\Reader\State\RowState;
+use Mnb\PHPExcel\Snapshot\VisualSnapshotReaderInterface;
 use Throwable;
 use PDO;
 
@@ -467,6 +468,21 @@ final class ReadSession
         $array = $report->toArray();
         $report->capabilities(\Mnb\PHPExcel\Metadata\MetadataCapabilities::fromReport($array));
         return $report->toArray();
+    }
+
+    /**
+     * Return a portable content, style, and worksheet-layout snapshot.
+     *
+     * @param array<string,mixed> $options
+     * @return array<string,mixed>
+     */
+    public function visualSnapshot(array $options = []): array
+    {
+        if (!$this->reader instanceof VisualSnapshotReaderInterface) {
+            throw new MnbExcelException('Visual snapshots are not supported by the selected reader.');
+        }
+
+        return $this->reader->visualSnapshot($this->path, array_replace($this->defaultOptions, $options));
     }
 
 
