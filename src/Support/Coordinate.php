@@ -6,18 +6,32 @@ namespace Mnb\PHPExcel\Support;
 
 final class Coordinate
 {
+    /** @var array<int,string> */
+    private static array $indexToNameCache = [];
+
+    /** @var array<string,int> */
+    private static array $nameToIndexCache = [];
+
     public static function columnIndexToName(int $index): string
     {
         if ($index < 1) {
             throw new MnbExcelException('Column index must be greater than zero.');
         }
 
+        if (isset(self::$indexToNameCache[$index])) {
+            return self::$indexToNameCache[$index];
+        }
+
+        $originalIndex = $index;
         $name = '';
         while ($index > 0) {
             $index--;
             $name = chr(65 + ($index % 26)) . $name;
             $index = intdiv($index, 26);
         }
+
+        self::$indexToNameCache[$originalIndex] = $name;
+        self::$nameToIndexCache[$name] = $originalIndex;
 
         return $name;
     }
@@ -29,11 +43,18 @@ final class Coordinate
             throw new MnbExcelException('Invalid column name: ' . $name);
         }
 
+        if (isset(self::$nameToIndexCache[$name])) {
+            return self::$nameToIndexCache[$name];
+        }
+
         $index = 0;
         $length = strlen($name);
         for ($i = 0; $i < $length; $i++) {
             $index = $index * 26 + (ord($name[$i]) - 64);
         }
+
+        self::$nameToIndexCache[$name] = $index;
+        self::$indexToNameCache[$index] = $name;
 
         return $index;
     }
