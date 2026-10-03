@@ -2,7 +2,9 @@
 declare(strict_types=1);
 namespace Mnb\PHPExcel\Cloud\Http;
 final class HttpClient {
- public function request(string $method,string $url,array $headers=[],?string $body=null): array {
+ public function request(string $method,string $url,array $headers=[],?string $body=null,int $maxRetries=3): array {
+  $attempt=0;
+  retry:
   $headerLines=[]; foreach($headers as $k=>$v)$headerLines[]=$k.': '.$v;
   $opts=['http'=>['method'=>$method,'header'=>implode("\r\n",$headerLines),'ignore_errors'=>true,'timeout'=>60]];
   if($body!==null)$opts['http']['content']=$body;
@@ -11,8 +13,9 @@ final class HttpClient {
   if(isset($responseHeaders[0])&&preg_match('/\s(\d{3})\s/',$responseHeaders[0],$m))$status=(int)$m[1];
   $map=[];foreach($responseHeaders as $line){if(str_contains($line,':')){[$k,$v]=explode(':',$line,2);$map[strtolower(trim($k))]=trim($v);}}
   if($data===false)$data='';
+  if(($status===429||$status>=500)&&$attempt<$maxRetries){$attempt++;usleep((int)(100000*(2**($attempt-1))));goto retry;}
   if($status<200||$status>=300)throw new \RuntimeException("Cloud HTTP $status for $method $url: ".substr($data,0,1000));
-  return ['status'=>$status,'headers'=>$map,'body'=>$data];
+  return ['status'=>$status,'headers'=>$map,'body'=>$data,'attempts'=>$attempt+1];
  }
  public function json(string $method,string $url,array $headers=[],?array $body=null): array {
   $headers['Accept']='application/json'; if($body!==null)$headers['Content-Type']='application/json';

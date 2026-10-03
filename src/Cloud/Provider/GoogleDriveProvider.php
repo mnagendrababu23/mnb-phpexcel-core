@@ -1,9 +1,9 @@
 <?php
 declare(strict_types=1);
 namespace Mnb\PHPExcel\Cloud\Provider;
-use Mnb\PHPExcel\Cloud\{CloudAccount,CloudFile,CloudProviderInterface};
+use Mnb\PHPExcel\Cloud\{CloudAccount,CloudFile,CloudProviderInterface,ResumableCloudProviderInterface};
 use Mnb\PHPExcel\Cloud\Http\HttpClient;
-final class GoogleDriveProvider implements CloudProviderInterface {
+final class GoogleDriveProvider implements ResumableCloudProviderInterface {
  public function __construct(private ?HttpClient $http=null){$this->http??=new HttpClient();}
  public function name(): string{return 'google-drive';}
  private function h(CloudAccount $a):array{return ['Authorization'=>'Bearer '.$a->accessToken()];}
@@ -21,6 +21,17 @@ final class GoogleDriveProvider implements CloudProviderInterface {
   $r=$this->http->request('POST','https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,webViewLink,md5Checksum',$h,$body);
   $d=json_decode($r['body'],true,512,JSON_THROW_ON_ERROR);return $this->file($d);
  }
+ public function uploadResumable(CloudAccount $a,string $path,array $o=[]):CloudFile{
+  $size=filesize($path);if($size===false)throw new \InvalidArgumentException("File not found: $path");$name=(string)($o['name']??basename($path));$mime=(string)($o['mime_type']??'application/octet-stream');
+  $meta=['name'=>$name];if(!empty($o['folder_id']))$meta['parents']=[(string)$o['folder_id']];
+  $h=$this->h($a);$h['Content-Type']='application/json; charset=UTF-8';$h['X-Upload-Content-Type']=$mime;$h['X-Upload-Content-Length']=(string)$size;
+  $r=$this->http->request('POST','https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,mimeType,size,webViewLink,md5Checksum',$h,json_encode($meta,JSON_THROW_ON_ERROR));
+  $uploadUrl=$r['headers']['location']??null;if(!$uploadUrl)throw new \RuntimeException('Google Drive did not return a resumable upload URL.');
+  $chunk=max(262144,(int)($o['chunk_size']??4194304));$chunk=(int)(ceil($chunk/262144)*262144);$fh=fopen($path,'rb');$offset=0;$last=[];
+  while(!feof($fh)&&$offset<$size){$data=fread($fh,min($chunk,$size-$offset));$end=$offset+strlen($data)-1;$hh=['Content-Length'=>(string)strlen($data),'Content-Type'=>$mime,'Content-Range'=>"bytes $offset-$end/$size"];$rr=$this->http->request('PUT',$uploadUrl,$hh,$data);if($rr['body']!=='')$last=json_decode($rr['body'],true)?:$last;$offset=$end+1;if(isset($o['progress'])&&is_callable($o['progress']))($o['progress'])($offset,$size);}
+  fclose($fh);return $this->file($last);
+ }
+
  public function download(CloudAccount $a,string $id,string $dst,array $o=[]):string{
   $r=$this->http->request('GET','https://www.googleapis.com/drive/v3/files/'.rawurlencode($id).'?alt=media',$this->h($a));
   if(file_put_contents($dst,$r['body'])===false)throw new \RuntimeException("Unable to write $dst");return $dst;
