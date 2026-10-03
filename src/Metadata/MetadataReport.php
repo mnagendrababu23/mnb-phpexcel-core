@@ -9,6 +9,8 @@ use JsonSerializable;
 final class MetadataReport implements JsonSerializable
 {
     public const SCHEMA_VERSION = '1.0';
+    public const LATEST_SCHEMA_VERSION = '1.0';
+    public const SUPPORTED_SCHEMA_VERSIONS = ['1.0'];
 
     /** @var list<string> */
     public const SECTIONS = [

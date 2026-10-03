@@ -29,6 +29,8 @@ final class MetadataOptions
             'include_package_parts' => (bool) ($options['include_package_parts'] ?? MetadataProfile::atLeast($profile, MetadataProfile::FULL)),
             'include_relationships' => (bool) ($options['include_relationships'] ?? ($profile === MetadataProfile::FORENSIC)),
             'accurate_sheet_counts' => (bool) ($options['accurate_sheet_counts'] ?? MetadataProfile::atLeast($profile, MetadataProfile::FULL)),
+            'only_sections' => isset($options['only_sections']) ? array_values(array_unique(array_map('strval', (array) $options['only_sections']))) : null,
+            'schema_version' => (string) ($options['schema_version'] ?? MetadataReport::SCHEMA_VERSION),
         ]);
 
         return new self($normalized);
@@ -67,6 +69,25 @@ final class MetadataOptions
     public function accurateSheetCounts(): bool
     {
         return (bool) $this->values['accurate_sheet_counts'];
+    }
+
+
+    /** @return list<string>|null */
+    public function onlySections(): ?array
+    {
+        $value = $this->values['only_sections'] ?? null;
+        return is_array($value) ? $value : null;
+    }
+
+    public function wantsSection(string $section): bool
+    {
+        $only = $this->onlySections();
+        return $only === null || in_array($section, $only, true);
+    }
+
+    public function schemaVersion(): string
+    {
+        return (string) ($this->values['schema_version'] ?? MetadataReport::SCHEMA_VERSION);
     }
 
     public function password(): string
