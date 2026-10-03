@@ -22,13 +22,12 @@ final class OneDriveProvider implements ResumableCloudProviderInterface {
   $session=$this->http->json('POST',$url,$this->h($a),['item'=>['@microsoft.graph.conflictBehavior'=>$o['conflict_behavior']??'replace','name'=>$name]]);
   $uploadUrl=(string)$session['uploadUrl'];$chunk=max(327680,(int)($o['chunk_size']??3276800));$chunk=(int)(ceil($chunk/327680)*327680);
   $fh=fopen($path,'rb');$offset=0;$last=[];
-  while(!feof($fh)&&$offset<$size){$data=fread($fh,min($chunk,$size-$offset));$end=$offset+strlen($data)-1;$h=['Content-Length'=>(string)strlen($data),'Content-Range'=>"bytes $offset-$end/$size"];$r=$this->http->request('PUT',$uploadUrl,$h,$data);$last=json_decode($r['body'],true)?:[];$offset=$end+1;if(isset($o['progress'])&&is_callable($o['progress']))($o['progress'])($offset,$size);}
+  while(!feof($fh)&&$offset<$size){$data=fread($fh,min($chunk,$size-$offset));$end=$offset+strlen($data)-1;$h=['Content-Length'=>(string)strlen($data),'Content-Range'=>"bytes $offset-$end/$size"];$r=$this->http->request('PUT',$uploadUrl,$h,$data,(int)($o['max_retries']??0));$reply=$r['body']===''?[]:(json_decode($r['body'],true)?:[]);$last=$reply?:$last;if($r['status']===202&&isset($reply['nextExpectedRanges'][0])&&preg_match('/^(\d+)-/',$reply['nextExpectedRanges'][0],$m))$offset=(int)$m[1];else $offset=$end+1;if(isset($o['progress'])&&is_callable($o['progress']))($o['progress'])($offset,$size);}
   fclose($fh);return $this->file($last);
  }
 
  public function download(CloudAccount $a,string $id,string $dst,array $o=[]):string{
-  $r=$this->http->request('GET',$this->base($a).'/items/'.rawurlencode($id).'/content',$this->h($a));
-  if(file_put_contents($dst,$r['body'])===false)throw new \RuntimeException("Unable to write $dst");return $dst;
+  $this->http->downloadTo($this->base($a).'/items/'.rawurlencode($id).'/content',$dst,$this->h($a),$o);return $dst;
  }
  public function metadata(CloudAccount $a,string $id,array $o=[]):CloudFile{$d=$this->http->json('GET',$this->base($a).'/items/'.rawurlencode($id),$this->h($a));return $this->file($d);}
  public function delete(CloudAccount $a,string $id,array $o=[]):void{$this->http->request('DELETE',$this->base($a).'/items/'.rawurlencode($id),$this->h($a));}

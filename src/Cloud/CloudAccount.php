@@ -3,6 +3,7 @@ declare(strict_types=1);
 namespace Mnb\PHPExcel\Cloud;
 final readonly class CloudAccount {
  public function __construct(public string $name, public string $provider, public array $config){}
+ public function refreshAccessToken(): ?string { $c=$this->config['credentials']??null; return $c instanceof \Mnb\PHPExcel\Cloud\Auth\CredentialProviderInterface ? $c->refresh($this) : null; }
  public function accessToken(): string {
   $credentials=$this->config['credentials']??null;
   if($credentials instanceof \Mnb\PHPExcel\Cloud\Auth\CredentialProviderInterface) $token=$credentials->accessToken($this);

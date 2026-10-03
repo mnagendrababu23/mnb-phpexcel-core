@@ -28,13 +28,12 @@ final class GoogleDriveProvider implements ResumableCloudProviderInterface {
   $r=$this->http->request('POST','https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable&fields=id,name,mimeType,size,webViewLink,md5Checksum',$h,json_encode($meta,JSON_THROW_ON_ERROR));
   $uploadUrl=$r['headers']['location']??null;if(!$uploadUrl)throw new \RuntimeException('Google Drive did not return a resumable upload URL.');
   $chunk=max(262144,(int)($o['chunk_size']??4194304));$chunk=(int)(ceil($chunk/262144)*262144);$fh=fopen($path,'rb');$offset=0;$last=[];
-  while(!feof($fh)&&$offset<$size){$data=fread($fh,min($chunk,$size-$offset));$end=$offset+strlen($data)-1;$hh=['Content-Length'=>(string)strlen($data),'Content-Type'=>$mime,'Content-Range'=>"bytes $offset-$end/$size"];$rr=$this->http->request('PUT',$uploadUrl,$hh,$data);if($rr['body']!=='')$last=json_decode($rr['body'],true)?:$last;$offset=$end+1;if(isset($o['progress'])&&is_callable($o['progress']))($o['progress'])($offset,$size);}
+  while(!feof($fh)&&$offset<$size){$data=fread($fh,min($chunk,$size-$offset));$end=$offset+strlen($data)-1;$hh=['Content-Length'=>(string)strlen($data),'Content-Type'=>$mime,'Content-Range'=>"bytes $offset-$end/$size"];$rr=$this->http->request('PUT',$uploadUrl,$hh,$data,(int)($o['max_retries']??0),[308]);if($rr['body']!=='')$last=json_decode($rr['body'],true)?:$last;if($rr['status']===308){$range=$rr['headers']['range']??'';$offset=preg_match('/bytes=0-(\d+)/',$range,$m)?((int)$m[1]+1):$end+1;}else{$offset=$end+1;}if(isset($o['progress'])&&is_callable($o['progress']))($o['progress'])($offset,$size);}
   fclose($fh);return $this->file($last);
  }
 
  public function download(CloudAccount $a,string $id,string $dst,array $o=[]):string{
-  $r=$this->http->request('GET','https://www.googleapis.com/drive/v3/files/'.rawurlencode($id).'?alt=media',$this->h($a));
-  if(file_put_contents($dst,$r['body'])===false)throw new \RuntimeException("Unable to write $dst");return $dst;
+  $this->http->downloadTo('https://www.googleapis.com/drive/v3/files/'.rawurlencode($id).'?alt=media',$dst,$this->h($a),$o);return $dst;
  }
  public function metadata(CloudAccount $a,string $id,array $o=[]):CloudFile{
   $d=$this->http->json('GET','https://www.googleapis.com/drive/v3/files/'.rawurlencode($id).'?fields=id,name,mimeType,size,webViewLink,md5Checksum',$this->h($a));return $this->file($d);

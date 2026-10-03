@@ -23,7 +23,7 @@ final class CloudManager {
  public function removeTemporaryFile(string $path):void{$this->temps->remove($path);}
  public function cleanupTemporaryFiles():void{$this->temps->cleanup();}
  public function open(string $remoteId,array $options=[]):RemoteFile{$a=$this->a($options['account']??null);$file=$this->providers[$a->provider]->metadata($a,$remoteId,$options);return new RemoteFile($this,$file,$options);}
-  public function upload(string $localPath,array $options=[]):CloudFile{$a=$this->a($options['account']??null);return $this->providers[$a->provider]->upload($a,$localPath,$options);}
+  public function upload(string $localPath,array $options=[]):CloudFile{$a=$this->a($options['account']??null);$p=$this->providers[$a->provider];$size=is_file($localPath)?(filesize($localPath)?:0):0;$threshold=(int)($options['resumable_threshold']??8388608);if($size>$threshold&&$p instanceof ResumableCloudProviderInterface)return $p->uploadResumable($a,$localPath,$options);return $p->upload($a,$localPath,$options);}
  public function uploadResumable(string $localPath,array $options=[]):CloudFile{$a=$this->a($options['account']??null);$p=$this->providers[$a->provider];if(!$p instanceof ResumableCloudProviderInterface)throw new \LogicException("Provider {$a->provider} does not support resumable upload.");return $p->uploadResumable($a,$localPath,$options);}
   public function download(string $remoteId,string $destination,array $options=[]):string{$a=$this->a($options['account']??null);return $this->providers[$a->provider]->download($a,$remoteId,$destination,$options);}
  public function file(string $remoteId,array $options=[]):CloudFile{$a=$this->a($options['account']??null);return $this->providers[$a->provider]->metadata($a,$remoteId,$options);}
