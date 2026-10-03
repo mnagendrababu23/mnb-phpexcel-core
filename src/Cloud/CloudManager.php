@@ -7,10 +7,12 @@ final class CloudManager {
  /** @var array<string,CloudProviderInterface> */ private array $providers=[];
  private GoogleSheetsProvider $sheets;
  private TempFileManager $temps;
+ private CloudTelemetry $telemetry;
  public function __construct(?TempFileManager $temps=null){
-  $this->temps=$temps??new TempFileManager();
+  $this->temps=$temps??new TempFileManager();$this->telemetry=new CloudTelemetry();
   $this->providers['local']=new LocalProvider();$this->providers['google-drive']=new GoogleDriveProvider();$this->providers['onedrive']=new OneDriveProvider();$this->sheets=new GoogleSheetsProvider();
  }
+ public function telemetry():CloudTelemetry{return $this->telemetry;}
  public function registerProvider(CloudProviderInterface $provider): self { $this->providers[$provider->name()]=$provider; return $this; }
  public function account(string $name,array $config=[]):self{
   if($config!==[]){$provider=(string)($config['provider']??'');if(!isset($this->providers[$provider]))throw new \InvalidArgumentException("Unknown cloud provider: $provider");$this->accounts[$name]=new CloudAccount($name,$provider,$config);}
@@ -28,6 +30,7 @@ final class CloudManager {
   public function download(string $remoteId,string $destination,array $options=[]):string{$a=$this->a($options['account']??null);return $this->providers[$a->provider]->download($a,$remoteId,$destination,$options);}
  public function file(string $remoteId,array $options=[]):CloudFile{$a=$this->a($options['account']??null);return $this->providers[$a->provider]->metadata($a,$remoteId,$options);}
  public function delete(string $remoteId,array $options=[]):void{$a=$this->a($options['account']??null);$this->providers[$a->provider]->delete($a,$remoteId,$options);}
+ public function exportGoogleFile(string $remoteId,string $destination,string $mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',array $options=[]):string{$a=$this->a($options['account']??null);$p=$this->providers[$a->provider];if(!$p instanceof \Mnb\PHPExcel\Cloud\Provider\GoogleDriveProvider)throw new \LogicException('Google export requires google-drive provider.');return $p->export($a,$remoteId,$destination,$mime,$options);}
  public function createGoogleSheet(string $title,array $sheets=[],array $options=[]):CloudFile{$a=$this->a($options['account']??null);if($a->provider!=='google-drive')throw new \LogicException('Google Sheets requires a google-drive account.');return $this->sheets->create($a,$title,$sheets);}
  public function readGoogleSheet(string $id,string $range='Sheet1!A:ZZ',array $options=[]):array{$a=$this->a($options['account']??null);return $this->sheets->readRows($a,$id,$range);}
 }
